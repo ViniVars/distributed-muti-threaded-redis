@@ -1,8 +1,7 @@
-package com.distributed_cache.caching_service.kubernetes;
+package com.distributed_cache.caching_service.service;
 
 import com.distributed_cache.caching_service.commons.GlobalVariableClass;
 import com.distributed_cache.caching_service.repository.FencingTokenRepository;
-import com.distributed_cache.caching_service.service.SynchronizationService;
 import io.kubernetes.client.openapi.ApiClient;
 import io.kubernetes.client.openapi.ApiException;
 import io.kubernetes.client.openapi.apis.CoordinationV1Api;
@@ -10,16 +9,14 @@ import io.kubernetes.client.openapi.models.V1Lease;
 import io.kubernetes.client.util.ClientBuilder;
 
 import jakarta.annotation.PostConstruct;
-import lombok.Getter;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.UUID;
 
 @Component
-public class LeaderShipManagement {
+public class LeadershipService {
 
     private static final String LEASE_NAME =
             "cache-shard-0-leader";
@@ -39,7 +36,7 @@ public class LeaderShipManagement {
     private final FencingTokenRepository fencingTokenRepository;
     private final SynchronizationService synchronizationService;
 
-    public LeaderShipManagement(GlobalVariableClass globalVariableClass, FencingTokenRepository fencingTokenRepository, SynchronizationService synchronizationService) {
+    public LeadershipService(GlobalVariableClass globalVariableClass, FencingTokenRepository fencingTokenRepository, SynchronizationService synchronizationService) {
         this.globalVariableClass = globalVariableClass;
         this.fencingTokenRepository = fencingTokenRepository;
         this.synchronizationService = synchronizationService;

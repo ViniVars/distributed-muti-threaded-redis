@@ -12,6 +12,7 @@ import org.hibernate.annotations.CreationTimestamp;
 import org.jetbrains.annotations.NotNull;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Entity
 @Data
@@ -33,7 +34,7 @@ public class CacheEventSource {
     private String path;
     @NonNull
     @CreationTimestamp
-    private LocalDateTime timeStamp;
+    private OffsetDateTime timeStamp;
 
     private Integer versionNumber;
     private Boolean replicationStatus = false;

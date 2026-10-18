@@ -7,6 +7,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
 @Repository
@@ -19,7 +20,20 @@ public interface CacheRepository extends JpaRepository<CacheEventSource, Integer
       AND ces.shardID = :ShardID
     ORDER BY ces.key ASC, ces.versionNumber ASC
     """)
-    List<CacheEventSource> getCacheEvent(
+    List<CacheEventSource> getCacheEventOutboxSync(
             @Param("ShardID") Long shardID
     );
+
+    @Query("""
+    SELECT ces
+    FROM CacheEventSource ces
+    WHERE ces.timeStamp >= :time_stamp
+      AND ces.shardID = :ShardID
+    ORDER BY ces.key ASC, ces.versionNumber ASC
+    """)
+    List<CacheEventSource> getCacheEventSnapshotSync(
+            @Param("ShardID") Long shardID
+            , @Param("time_stamp")OffsetDateTime timeStamp
+            );
+
 }
