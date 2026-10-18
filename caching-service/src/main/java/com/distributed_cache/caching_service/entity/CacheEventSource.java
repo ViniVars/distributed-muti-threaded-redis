@@ -9,6 +9,7 @@ import lombok.Generated;
 import lombok.NoArgsConstructor;
 import lombok.NonNull;
 import org.hibernate.annotations.CreationTimestamp;
+import org.jetbrains.annotations.NotNull;
 
 import java.time.LocalDateTime;
 
@@ -36,5 +37,8 @@ public class CacheEventSource {
 
     private Integer versionNumber;
     private Boolean replicationStatus = false;
+    @NonNull
+    @Column(name = "shard_id")
+    private Long shardID;
 
 }

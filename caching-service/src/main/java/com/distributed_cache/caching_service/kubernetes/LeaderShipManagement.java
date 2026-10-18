@@ -1,5 +1,7 @@
 package com.distributed_cache.caching_service.kubernetes;
 
+import com.distributed_cache.caching_service.commons.GlobalVariableClass;
+import com.distributed_cache.caching_service.repository.FencingTokenRepository;
 import io.kubernetes.client.openapi.ApiClient;
 import io.kubernetes.client.openapi.ApiException;
 import io.kubernetes.client.openapi.apis.CoordinationV1Api;
@@ -25,15 +27,20 @@ public class LeaderShipManagement {
 
     // Temporary identity for local testing.
     // Each deployed replica must have a unique identity.
-    private static final String INSTANCE_ID =
-            UUID.randomUUID().toString();
+
+
 
     private static final int LEASE_DURATION_SECONDS = 15;
 
-    @Getter
-    private volatile boolean leader = false;
 
     private CoordinationV1Api api;
+    private final GlobalVariableClass globalVariableClass;
+    private final FencingTokenRepository fencingTokenRepository;
+
+    public LeaderShipManagement(GlobalVariableClass globalVariableClass, FencingTokenRepository fencingTokenRepository) {
+        this.globalVariableClass = globalVariableClass;
+        this.fencingTokenRepository = fencingTokenRepository;
+    }
 
     @PostConstruct
     public void initialize() throws Exception {
@@ -64,7 +71,7 @@ public class LeaderShipManagement {
                     holder == null || holder.isBlank();
 
             boolean alreadyLeader =
-                    INSTANCE_ID.equals(holder);
+                    globalVariableClass.getInstanceID().equals(holder);
 
             OffsetDateTime renewTime =
                     lease.getSpec().getRenewTime();
@@ -85,7 +92,7 @@ public class LeaderShipManagement {
             if (alreadyLeader || unclaimed || expired) {
 
                 lease.getSpec()
-                        .setHolderIdentity(INSTANCE_ID);
+                        .setHolderIdentity(globalVariableClass.getInstanceID());
 
                 lease.getSpec()
                         .setLeaseDurationSeconds(
@@ -114,23 +121,30 @@ public class LeaderShipManagement {
                         LEASE_NAME, NAMESPACE, lease
                 ).execute();
 
-                if (!leader) {
+                if (!globalVariableClass.isLeader) {
+
                     System.out.println(
-                            "Leadership acquired by " + INSTANCE_ID);
+                            "Leadership acquired by " + globalVariableClass.getInstanceID());
+
+                    globalVariableClass.setFencingToken(fencingTokenRepository.incrementToken(0L));
+
+
+
                 } else {
                     System.out.println("Lease renewed.");
                 }
 
-                leader = true;
+                globalVariableClass.setLeader(true);
+//                System.out.println(globalVariableClass.getFencingToken());
 
             } else {
 
-                if (leader) {
+                if (globalVariableClass.isLeader) {
                     System.out.println(
-                            "Leadership lost. Stopping leader-only work.");
+                            "Leadership lost. Stopping Leader-only work.");
                 }
 
-                leader = false;
+                globalVariableClass.setLeader(false);
 
                 System.out.println(
                         "Follower. Current holder: " + holder);
@@ -138,9 +152,9 @@ public class LeaderShipManagement {
 
         } catch (ApiException e) {
 
-            // We could not confirm or renew leadership.
-            // Fail closed rather than continuing leader-only work.
-            leader = false;
+            // We could not confirm or renew Leadership.
+            // Fail closed rather than continuing Leader-only work.
+            globalVariableClass.setLeader(false);
 
             if (e.getCode() == 409) {
                 System.out.println(
@@ -151,7 +165,8 @@ public class LeaderShipManagement {
             }
 
         } catch (Exception e) {
-            leader = false;
+
+            globalVariableClass.setLeader(false);
 
             System.err.println(
                     "Election check failed: " + e.getMessage());
