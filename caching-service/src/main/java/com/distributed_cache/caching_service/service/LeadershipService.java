@@ -56,6 +56,10 @@ public class LeadershipService {
     @Scheduled(fixedDelay = 2000)
     public void electionTick() {
 
+        if (!globalVariableClass.isSnapped()){
+            return;
+        }
+
         try {
             V1Lease lease = api
                     .readNamespacedLease(LEASE_NAME, NAMESPACE)

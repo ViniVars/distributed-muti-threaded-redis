@@ -50,6 +50,8 @@ public class SynchronizationService {
         Integer eventVersion = cacheEvent.getVersionNumber();
 
         CacheValue current = cacheStore.inMemoryCache.get(key);
+//        System.out.println(cacheEvent + "\n");
+//        System.out.println(current + "\n\n");
 
         int currentVersion =
                 current == null ? 0 : current.getVersionNumber();
@@ -140,12 +142,12 @@ public class SynchronizationService {
 
     public void outboxSync() throws Exception {
 
-        List<CacheEventSource> cacheEventSourceList = cacheRepository.getCacheEventOutboxSync(globalVariableClass.getShardID());
-
-
-        for (CacheEventSource cacheEvent : cacheEventSourceList) {
-            replayEvent(cacheEvent);
-        }
+//        List<CacheEventSource> cacheEventSourceList = cacheRepository.getCacheEventOutboxSync(globalVariableClass.getShardID());
+//
+//
+//        for (CacheEventSource cacheEvent : cacheEventSourceList) {
+//            replayEvent(cacheEvent);
+//        }
 
         for (Map.Entry<String, CacheValue> entry :
                 cacheStore.inMemoryCache.entrySet()) {

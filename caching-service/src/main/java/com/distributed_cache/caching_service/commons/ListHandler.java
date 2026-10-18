@@ -38,51 +38,43 @@ public class ListHandler implements DataObject {
             RequestDTO requestDTO,
             Boolean isSync) throws Exception {
 
-        String key = requestDTO.getKey();
+        return switch (requestDTO.getOperationType()) {
+            case APPEND -> append(requestDTO, isSync);
+            case POP -> pop(requestDTO, isSync);
 
-        synchronized (cacheStore.getLock(key)) {
-            return switch (requestDTO.getOperationType()) {
-                case APPEND -> append(requestDTO, isSync);
-                case POP -> pop(requestDTO, isSync);
-
-                default -> throw new IllegalArgumentException(
-                        "Operation not supported on LIST"
-                );
-            };
-        }
+            default -> throw new IllegalArgumentException(
+                    "Operation not supported on LIST"
+            );
+        };
     }
 
     @Override
     public Object read(String key, String path) {
 
-        synchronized (cacheStore.getLock(key)) {
+        CacheValue current = cacheStore.inMemoryCache.get(key);
 
-            CacheValue current =
-                    cacheStore.inMemoryCache.get(key);
-
-            if (current == null) {
-                return null;
-            }
-
-            if (!(current.getValue() instanceof List<?> list)) {
-                throw new IllegalStateException(
-                        "Cached value is not a LIST"
-                );
-            }
-
-            return new ArrayList<>(list);
+        if (current == null) {
+            return null;
         }
+
+        if (!(current.getValue() instanceof List<?> list)) {
+            throw new IllegalStateException(
+                    "Cached value is not a LIST"
+            );
+        }
+
+        // Return a copy so callers cannot modify cached state.
+        return new ArrayList<>(list);
     }
 
     private void persistEvent(
             RequestDTO requestDTO,
             int newVersion) throws Exception {
 
-        CacheEventSource event =
-                mapper.map(
-                        requestDTO,
-                        CacheEventSource.class
-                );
+        CacheEventSource event = mapper.map(
+                requestDTO,
+                CacheEventSource.class
+        );
 
         // Serialize the value so the event can be replayed.
         event.setValue(
@@ -94,7 +86,7 @@ public class ListHandler implements DataObject {
         event.setReplicationStatus(false);
         event.setVersionNumber(newVersion);
 
-        // Checks fencing and persists in one transaction.
+        // Validate leadership and persist the event.
         databaseService.saveEventIfLeader(event);
     }
 
@@ -104,17 +96,14 @@ public class ListHandler implements DataObject {
 
         String key = requestDTO.getKey();
 
-        CacheValue current =
-                cacheStore.inMemoryCache.get(key);
+        CacheValue current = cacheStore.inMemoryCache.get(key);
 
         List<Object> newList = new ArrayList<>();
 
         int newVersion;
 
         if (current == null) {
-
             newVersion = 1;
-
         } else {
 
             if (!(current.getValue() instanceof List<?> oldList)) {
@@ -132,13 +121,12 @@ public class ListHandler implements DataObject {
 
         newList.add(requestDTO.getValue());
 
-        // Normal writes go through DatabaseService.
+        // Normal writes persist before updating memory.
+        // Synchronization writes skip database persistence.
         if (!Boolean.TRUE.equals(isSync)) {
             persistEvent(requestDTO, newVersion);
         }
 
-        // Update memory only after persistence succeeds,
-        // or immediately for synchronization.
         cacheStore.inMemoryCache.put(
                 key,
                 new CacheValue(newList, newVersion)
@@ -153,8 +141,7 @@ public class ListHandler implements DataObject {
 
         String key = requestDTO.getKey();
 
-        CacheValue current =
-                cacheStore.inMemoryCache.get(key);
+        CacheValue current = cacheStore.inMemoryCache.get(key);
 
         if (current == null) {
             throw new IllegalArgumentException(

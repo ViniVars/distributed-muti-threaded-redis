@@ -37,68 +37,61 @@ public class JsonHandler implements DataObject {
             RequestDTO requestDTO,
             Boolean isSync) throws Exception {
 
-        String key = requestDTO.getKey();
+        return switch (requestDTO.getOperationType()) {
+            case SET -> set(requestDTO, isSync);
 
-        synchronized (cacheStore.getLock(key)) {
-            return switch (requestDTO.getOperationType()) {
-                case SET -> set(requestDTO, isSync);
-
-                default -> throw new IllegalArgumentException(
-                        "Operation not supported on JSON"
-                );
-            };
-        }
+            default -> throw new IllegalArgumentException(
+                    "Operation not supported on JSON"
+            );
+        };
     }
 
     @Override
     public Object read(String key, String path) {
 
-        synchronized (cacheStore.getLock(key)) {
+        CacheValue current = cacheStore.inMemoryCache.get(key);
 
-            CacheValue current =
-                    cacheStore.inMemoryCache.get(key);
+        if (current == null) {
+            return null;
+        }
 
-            if (current == null) {
-                return null;
-            }
+        JsonNode root = objectMapper.valueToTree(
+                current.getValue()
+        );
 
-            JsonNode root =
-                    objectMapper.valueToTree(current.getValue());
-
-            // Empty path reads the complete JSON document.
-            if (path == null || path.isBlank()) {
-                return objectMapper.convertValue(
-                        root,
-                        Object.class
-                );
-            }
-
-            String[] parts = parsePath(path);
-            JsonNode node = root;
-
-            for (String part : parts) {
-
-                if (node == null || !node.isObject()) {
-                    throw new IllegalArgumentException(
-                            "Path does not match the JSON structure: "
-                                    + path
-                    );
-                }
-
-                node = node.get(part);
-
-                if (node == null) {
-                    throw new IllegalArgumentException(
-                            "JSON field does not exist: " + part
-                    );
-                }
-            }
-
+        // Empty path reads the complete JSON document.
+        if (path == null || path.isBlank()) {
             return objectMapper.convertValue(
-                    node,
+                    root,
                     Object.class
             );
         }
+
+        String[] parts = parsePath(path);
+        JsonNode node = root;
+
+        for (String part : parts) {
+
+            if (node == null || !node.isObject()) {
+                throw new IllegalArgumentException(
+                        "Path does not match the JSON structure: "
+                                + path
+                );
+            }
+
+            node = node.get(part);
+
+            if (node == null) {
+                throw new IllegalArgumentException(
+                        "JSON field does not exist: " + part
+                );
+            }
+        }
+
+        return objectMapper.convertValue(
+                node,
+                Object.class
+        );
     }
 
     public Boolean set(
@@ -108,8 +101,7 @@ public class JsonHandler implements DataObject {
         String key = requestDTO.getKey();
         String path = requestDTO.getPath();
 
-        CacheValue current =
-                cacheStore.inMemoryCache.get(key);
+        CacheValue current = cacheStore.inMemoryCache.get(key);
 
         JsonNode newRoot;
 
@@ -135,8 +127,9 @@ public class JsonHandler implements DataObject {
                 );
             }
 
-            JsonNode oldRoot =
-                    objectMapper.valueToTree(current.getValue());
+            JsonNode oldRoot = objectMapper.valueToTree(
+                    current.getValue()
+            );
 
             if (oldRoot == null || !oldRoot.isObject()) {
                 throw new IllegalArgumentException(
@@ -144,7 +137,7 @@ public class JsonHandler implements DataObject {
                 );
             }
 
-            // Do not mutate the cached object directly.
+            // Never mutate the cached JSON document directly.
             newRoot = oldRoot.deepCopy();
 
             String[] parts = parsePath(path);
@@ -181,10 +174,9 @@ public class JsonHandler implements DataObject {
             // Create or replace the final field.
             String targetField = parts[parts.length - 1];
 
-            JsonNode replacement =
-                    objectMapper.valueToTree(
-                            requestDTO.getValue()
-                    );
+            JsonNode replacement = objectMapper.valueToTree(
+                    requestDTO.getValue()
+            );
 
             if (replacement == null || replacement.isNull()) {
                 throw new IllegalArgumentException(
@@ -202,17 +194,15 @@ public class JsonHandler implements DataObject {
                 1
         );
 
-        // Normal writes use the transactional database service.
+        // Normal writes persist before updating memory.
         if (!Boolean.TRUE.equals(isSync)) {
 
-            CacheEventSource event =
-                    mapper.map(
-                            requestDTO,
-                            CacheEventSource.class
-                    );
+            CacheEventSource event = mapper.map(
+                    requestDTO,
+                    CacheEventSource.class
+            );
 
-            // Store the requested value and retain the path
-            // through the mapped RequestDTO fields.
+            // Preserve the requested value and path for replay.
             event.setValue(
                     objectMapper.writeValueAsString(
                             requestDTO.getValue()
@@ -225,8 +215,7 @@ public class JsonHandler implements DataObject {
             databaseService.saveEventIfLeader(event);
         }
 
-        // Synchronization and successful normal writes
-        // both update the in-memory cache.
+        // Update memory only after successful persistence.
         cacheStore.inMemoryCache.put(
                 key,
                 new CacheValue(newRoot, newVersion)

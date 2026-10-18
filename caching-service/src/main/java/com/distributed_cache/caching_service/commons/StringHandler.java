@@ -45,32 +45,26 @@ public class StringHandler implements DataObject {
             RequestDTO requestDTO,
             Boolean isSync) throws Exception {
 
-        String key = requestDTO.getKey();
         String value = requireString(requestDTO.getValue());
 
-        synchronized (cacheStore.getLock(key)) {
-            return switch (requestDTO.getOperationType()) {
-                case SET -> set(requestDTO, value, isSync);
+        return switch (requestDTO.getOperationType()) {
+            case SET -> set(requestDTO, value, isSync);
 
-                default -> throw new IllegalArgumentException(
-                        "Operation not supported on STRING"
-                );
-            };
-        }
+            default -> throw new IllegalArgumentException(
+                    "Operation not supported on STRING"
+            );
+        };
     }
 
     @Override
     public Object read(String key, String path) {
 
-        synchronized (cacheStore.getLock(key)) {
+        CacheValue current =
+                cacheStore.inMemoryCache.get(key);
 
-            CacheValue current =
-                    cacheStore.inMemoryCache.get(key);
-
-            return current == null
-                    ? null
-                    : current.getValue();
-        }
+        return current == null
+                ? null
+                : current.getValue();
     }
 
     public Boolean set(

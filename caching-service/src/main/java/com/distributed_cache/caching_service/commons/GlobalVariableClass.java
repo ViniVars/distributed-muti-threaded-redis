@@ -10,6 +10,7 @@ import java.util.UUID;
 public class GlobalVariableClass {
     public volatile boolean isLeader = false;
     public volatile boolean isReady = false;
+    public volatile boolean isSnapped = false;
     public String InstanceID = UUID.randomUUID().toString();
     public volatile Long FencingToken = -99L;
     public volatile Long ShardID = 0L;

@@ -31,7 +31,6 @@ public class IntHandler implements DataObject {
     }
 
     private int requireInteger(Object value) {
-
         if (!(value instanceof Integer number)) {
             throw new IllegalArgumentException(
                     "Expected an integer value"
@@ -46,49 +45,37 @@ public class IntHandler implements DataObject {
             RequestDTO requestDTO,
             Boolean isSync) throws Exception {
 
-        String key = requestDTO.getKey();
         Integer value = requireInteger(requestDTO.getValue());
 
-        synchronized (cacheStore.getLock(key)) {
+        return switch (requestDTO.getOperationType()) {
+            case SET -> set(requestDTO, value, isSync);
+            case INC -> inc(requestDTO, value, isSync);
+            case DRC -> dcr(requestDTO, value, isSync);
 
-            return switch (requestDTO.getOperationType()) {
-
-                case SET -> set(requestDTO, value, isSync);
-
-                case INC -> inc(requestDTO, value, isSync);
-
-                case DRC -> dcr(requestDTO, value, isSync);
-
-                default -> throw new IllegalArgumentException(
-                        "Operation not supported on INT"
-                );
-            };
-        }
+            default -> throw new IllegalArgumentException(
+                    "Operation not supported on INT"
+            );
+        };
     }
 
     @Override
     public Object read(String key, String path) {
 
-        synchronized (cacheStore.getLock(key)) {
+        CacheValue current = cacheStore.inMemoryCache.get(key);
 
-            CacheValue current =
-                    cacheStore.inMemoryCache.get(key);
-
-            return current == null
-                    ? null
-                    : current.getValue();
-        }
+        return current == null
+                ? null
+                : current.getValue();
     }
 
     private CacheEventSource createEvent(
             RequestDTO requestDTO,
             int newVersion) throws Exception {
 
-        CacheEventSource event =
-                modelMapper.map(
-                        requestDTO,
-                        CacheEventSource.class
-                );
+        CacheEventSource event = modelMapper.map(
+                requestDTO,
+                CacheEventSource.class
+        );
 
         event.setValue(
                 objectMapper.writeValueAsString(
@@ -106,11 +93,11 @@ public class IntHandler implements DataObject {
             RequestDTO requestDTO,
             int newVersion) throws Exception {
 
-        CacheEventSource event =
-                createEvent(requestDTO, newVersion);
+        CacheEventSource event = createEvent(
+                requestDTO,
+                newVersion
+        );
 
-        // Fencing validation and event insertion happen
-        // inside DatabaseService's transaction.
         databaseService.saveEventIfLeader(event);
     }
 
@@ -121,8 +108,7 @@ public class IntHandler implements DataObject {
 
         String key = requestDTO.getKey();
 
-        CacheValue current =
-                cacheStore.inMemoryCache.get(key);
+        CacheValue current = cacheStore.inMemoryCache.get(key);
 
         int newVersion = current == null
                 ? 1
@@ -130,12 +116,10 @@ public class IntHandler implements DataObject {
                 current.getVersionNumber(), 1
         );
 
-        // Normal writes must be authorized and persisted.
         if (!Boolean.TRUE.equals(isSync)) {
             persistEvent(requestDTO, newVersion);
         }
 
-        // Update memory only after persistence succeeds.
         cacheStore.inMemoryCache.put(
                 key,
                 new CacheValue(value, newVersion)
@@ -151,8 +135,7 @@ public class IntHandler implements DataObject {
 
         String key = requestDTO.getKey();
 
-        CacheValue current =
-                cacheStore.inMemoryCache.get(key);
+        CacheValue current = cacheStore.inMemoryCache.get(key);
 
         if (current == null) {
             throw new IllegalArgumentException(
@@ -160,16 +143,17 @@ public class IntHandler implements DataObject {
             );
         }
 
-        Integer currentValue =
-                (Integer) current.getValue();
+        if (!(current.getValue() instanceof Integer currentValue)) {
+            throw new IllegalArgumentException(
+                    "Existing value is not an INT"
+            );
+        }
 
-        int newValue =
-                Math.addExact(currentValue, value);
+        int newValue = Math.addExact(currentValue, value);
 
-        int newVersion =
-                Math.addExact(
-                        current.getVersionNumber(), 1
-                );
+        int newVersion = Math.addExact(
+                current.getVersionNumber(), 1
+        );
 
         if (!Boolean.TRUE.equals(isSync)) {
             persistEvent(requestDTO, newVersion);
@@ -190,8 +174,7 @@ public class IntHandler implements DataObject {
 
         String key = requestDTO.getKey();
 
-        CacheValue current =
-                cacheStore.inMemoryCache.get(key);
+        CacheValue current = cacheStore.inMemoryCache.get(key);
 
         if (current == null) {
             throw new IllegalArgumentException(
@@ -199,16 +182,17 @@ public class IntHandler implements DataObject {
             );
         }
 
-        Integer currentValue =
-                (Integer) current.getValue();
+        if (!(current.getValue() instanceof Integer currentValue)) {
+            throw new IllegalArgumentException(
+                    "Existing value is not an INT"
+            );
+        }
 
-        int newValue =
-                Math.subtractExact(currentValue, value);
+        int newValue = Math.subtractExact(currentValue, value);
 
-        int newVersion =
-                Math.addExact(
-                        current.getVersionNumber(), 1
-                );
+        int newVersion = Math.addExact(
+                current.getVersionNumber(), 1
+        );
 
         if (!Boolean.TRUE.equals(isSync)) {
             persistEvent(requestDTO, newVersion);
