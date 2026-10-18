@@ -12,13 +12,14 @@ import java.util.List;
 @Repository
 public interface CacheRepository extends JpaRepository<CacheEventSource, Integer> {
 
-    @Query(value = """
-            SELECT *
-            FROM CacheEventSource ces
-            WHERE ces.replicationStatus = false
-            AND ces.shardID = :ShardID
-            ORDER BY
-                ces.key, ces.version
-            """)
-    List<CacheEventSource> getCacheEvent(@Param("ShardID") Long ShardID);
+    @Query("""
+    SELECT ces
+    FROM CacheEventSource ces
+    WHERE ces.replicationStatus = false
+      AND ces.shardID = :ShardID
+    ORDER BY ces.key ASC, ces.versionNumber ASC
+    """)
+    List<CacheEventSource> getCacheEvent(
+            @Param("ShardID") Long shardID
+    );
 }

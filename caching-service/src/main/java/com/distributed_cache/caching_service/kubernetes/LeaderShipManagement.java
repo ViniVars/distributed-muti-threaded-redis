@@ -2,6 +2,7 @@ package com.distributed_cache.caching_service.kubernetes;
 
 import com.distributed_cache.caching_service.commons.GlobalVariableClass;
 import com.distributed_cache.caching_service.repository.FencingTokenRepository;
+import com.distributed_cache.caching_service.service.SynchronizationService;
 import io.kubernetes.client.openapi.ApiClient;
 import io.kubernetes.client.openapi.ApiException;
 import io.kubernetes.client.openapi.apis.CoordinationV1Api;
@@ -36,10 +37,12 @@ public class LeaderShipManagement {
     private CoordinationV1Api api;
     private final GlobalVariableClass globalVariableClass;
     private final FencingTokenRepository fencingTokenRepository;
+    private final SynchronizationService synchronizationService;
 
-    public LeaderShipManagement(GlobalVariableClass globalVariableClass, FencingTokenRepository fencingTokenRepository) {
+    public LeaderShipManagement(GlobalVariableClass globalVariableClass, FencingTokenRepository fencingTokenRepository, SynchronizationService synchronizationService) {
         this.globalVariableClass = globalVariableClass;
         this.fencingTokenRepository = fencingTokenRepository;
+        this.synchronizationService = synchronizationService;
     }
 
     @PostConstruct
@@ -127,14 +130,16 @@ public class LeaderShipManagement {
                             "Leadership acquired by " + globalVariableClass.getInstanceID());
 
                     globalVariableClass.setFencingToken(fencingTokenRepository.incrementToken(0L));
+                    synchronizationService.outboxSync();
 
+                    globalVariableClass.setLeader(true);
+                    globalVariableClass.setReady(true);
 
-
-                } else {
-                    System.out.println("Lease renewed.");
                 }
+//                else {
+//                    System.out.println("Lease renewed.");
+//                }
 
-                globalVariableClass.setLeader(true);
 //                System.out.println(globalVariableClass.getFencingToken());
 
             } else {
@@ -145,6 +150,7 @@ public class LeaderShipManagement {
                 }
 
                 globalVariableClass.setLeader(false);
+                globalVariableClass.setReady(false);
 
                 System.out.println(
                         "Follower. Current holder: " + holder);
@@ -155,6 +161,7 @@ public class LeaderShipManagement {
             // We could not confirm or renew Leadership.
             // Fail closed rather than continuing Leader-only work.
             globalVariableClass.setLeader(false);
+            globalVariableClass.setReady(false);
 
             if (e.getCode() == 409) {
                 System.out.println(
@@ -167,6 +174,7 @@ public class LeaderShipManagement {
         } catch (Exception e) {
 
             globalVariableClass.setLeader(false);
+            globalVariableClass.setReady(false);
 
             System.err.println(
                     "Election check failed: " + e.getMessage());

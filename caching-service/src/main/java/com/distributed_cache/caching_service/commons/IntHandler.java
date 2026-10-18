@@ -3,7 +3,7 @@ package com.distributed_cache.caching_service.commons;
 
 import com.distributed_cache.caching_service.dto.RequestDTO;
 import com.distributed_cache.caching_service.entity.CacheEventSource;
-import com.distributed_cache.caching_service.repository.CacheRepository;
+import com.distributed_cache.caching_service.service.DatabaseService;
 import com.distributed_cache.caching_service.utils.CacheStore;
 import com.distributed_cache.caching_service.utils.CacheValue;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -14,23 +14,24 @@ import org.springframework.stereotype.Component;
 public class IntHandler implements DataObject {
 
     private final CacheStore cacheStore;
-    private final CacheRepository cacheRepository;
+    private final DatabaseService databaseService;
     private final ModelMapper modelMapper;
     private final ObjectMapper objectMapper;
 
     public IntHandler(
             CacheStore cacheStore,
-            CacheRepository cacheRepository,
+            DatabaseService databaseService,
             ModelMapper modelMapper,
             ObjectMapper objectMapper) {
 
         this.cacheStore = cacheStore;
-        this.cacheRepository = cacheRepository;
+        this.databaseService = databaseService;
         this.modelMapper = modelMapper;
         this.objectMapper = objectMapper;
     }
 
     private int requireInteger(Object value) {
+
         if (!(value instanceof Integer number)) {
             throw new IllegalArgumentException(
                     "Expected an integer value"
@@ -41,7 +42,9 @@ public class IntHandler implements DataObject {
     }
 
     @Override
-    public Boolean execute(RequestDTO requestDTO) throws Exception {
+    public Boolean execute(
+            RequestDTO requestDTO,
+            Boolean isSync) throws Exception {
 
         String key = requestDTO.getKey();
         Integer value = requireInteger(requestDTO.getValue());
@@ -49,9 +52,13 @@ public class IntHandler implements DataObject {
         synchronized (cacheStore.getLock(key)) {
 
             return switch (requestDTO.getOperationType()) {
-                case SET -> set(requestDTO, value);
-                case INC -> inc(requestDTO, value);
-                case DRC -> dcr(requestDTO, value);
+
+                case SET -> set(requestDTO, value, isSync);
+
+                case INC -> inc(requestDTO, value, isSync);
+
+                case DRC -> dcr(requestDTO, value, isSync);
+
                 default -> throw new IllegalArgumentException(
                         "Operation not supported on INT"
                 );
@@ -60,14 +67,16 @@ public class IntHandler implements DataObject {
     }
 
     @Override
-    public Object read(String key, String path) throws Exception {
+    public Object read(String key, String path) {
 
         synchronized (cacheStore.getLock(key)) {
 
             CacheValue current =
                     cacheStore.inMemoryCache.get(key);
 
-            return current == null ? null : current.getValue();
+            return current == null
+                    ? null
+                    : current.getValue();
         }
     }
 
@@ -81,22 +90,34 @@ public class IntHandler implements DataObject {
                         CacheEventSource.class
                 );
 
-        // Store a JSON-serialized value as TEXT in PostgreSQL.
-        String serializedValue =
+        event.setValue(
                 objectMapper.writeValueAsString(
                         requestDTO.getValue()
-                );
+                )
+        );
 
-        event.setValue(serializedValue);
         event.setReplicationStatus(false);
         event.setVersionNumber(newVersion);
 
         return event;
     }
 
+    private void persistEvent(
+            RequestDTO requestDTO,
+            int newVersion) throws Exception {
+
+        CacheEventSource event =
+                createEvent(requestDTO, newVersion);
+
+        // Fencing validation and event insertion happen
+        // inside DatabaseService's transaction.
+        databaseService.saveEventIfLeader(event);
+    }
+
     public Boolean set(
             RequestDTO requestDTO,
-            Integer value) throws Exception {
+            Integer value,
+            Boolean isSync) throws Exception {
 
         String key = requestDTO.getKey();
 
@@ -105,14 +126,16 @@ public class IntHandler implements DataObject {
 
         int newVersion = current == null
                 ? 1
-                : Math.addExact(current.getVersionNumber(), 1);
+                : Math.addExact(
+                current.getVersionNumber(), 1
+        );
 
-        CacheEventSource event =
-                createEvent(requestDTO, newVersion);
+        // Normal writes must be authorized and persisted.
+        if (!Boolean.TRUE.equals(isSync)) {
+            persistEvent(requestDTO, newVersion);
+        }
 
-        // Persist the event before changing the in-memory cache.
-        cacheRepository.save(event);
-
+        // Update memory only after persistence succeeds.
         cacheStore.inMemoryCache.put(
                 key,
                 new CacheValue(value, newVersion)
@@ -123,7 +146,8 @@ public class IntHandler implements DataObject {
 
     public Boolean inc(
             RequestDTO requestDTO,
-            Integer value) throws Exception {
+            Integer value,
+            Boolean isSync) throws Exception {
 
         String key = requestDTO.getKey();
 
@@ -136,16 +160,20 @@ public class IntHandler implements DataObject {
             );
         }
 
-        Integer currentValue = (Integer) current.getValue();
+        Integer currentValue =
+                (Integer) current.getValue();
 
-        int newValue = Math.addExact(currentValue, value);
+        int newValue =
+                Math.addExact(currentValue, value);
+
         int newVersion =
-                Math.addExact(current.getVersionNumber(), 1);
+                Math.addExact(
+                        current.getVersionNumber(), 1
+                );
 
-        CacheEventSource event =
-                createEvent(requestDTO, newVersion);
-
-        cacheRepository.save(event);
+        if (!Boolean.TRUE.equals(isSync)) {
+            persistEvent(requestDTO, newVersion);
+        }
 
         cacheStore.inMemoryCache.put(
                 key,
@@ -157,7 +185,8 @@ public class IntHandler implements DataObject {
 
     public Boolean dcr(
             RequestDTO requestDTO,
-            Integer value) throws Exception {
+            Integer value,
+            Boolean isSync) throws Exception {
 
         String key = requestDTO.getKey();
 
@@ -170,16 +199,20 @@ public class IntHandler implements DataObject {
             );
         }
 
-        Integer currentValue = (Integer) current.getValue();
+        Integer currentValue =
+                (Integer) current.getValue();
 
-        int newValue = Math.subtractExact(currentValue, value);
+        int newValue =
+                Math.subtractExact(currentValue, value);
+
         int newVersion =
-                Math.addExact(current.getVersionNumber(), 1);
+                Math.addExact(
+                        current.getVersionNumber(), 1
+                );
 
-        CacheEventSource event =
-                createEvent(requestDTO, newVersion);
-
-        cacheRepository.save(event);
+        if (!Boolean.TRUE.equals(isSync)) {
+            persistEvent(requestDTO, newVersion);
+        }
 
         cacheStore.inMemoryCache.put(
                 key,

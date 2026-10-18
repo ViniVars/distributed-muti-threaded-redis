@@ -4,7 +4,6 @@ public enum OperationType {
     SET
     , INC
     , DRC
-    , CHN
     , APPEND
     , POP
 }

@@ -12,4 +12,5 @@ public class GlobalVariableClass {
     public volatile boolean isReady = false;
     public String InstanceID = UUID.randomUUID().toString();
     public volatile Long FencingToken = -99L;
+    public volatile Long ShardID = 0L;
 }

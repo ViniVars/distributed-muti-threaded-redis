@@ -19,7 +19,7 @@ public class CacheService {
     public void cacheWriteService(RequestDTO requestDTO) throws Exception {
         DataObjectType dataObjectType = requestDTO.getDataObjectType();
         DataObject dataObject = dataObjectFactory.create(dataObjectType);
-        dataObject.execute(requestDTO);
+        dataObject.execute(requestDTO, false);
     }
 
     public Object cacheReadService(RequestDTO requestDTO) throws Exception {

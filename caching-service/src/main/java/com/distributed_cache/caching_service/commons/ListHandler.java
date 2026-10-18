@@ -3,10 +3,10 @@ package com.distributed_cache.caching_service.commons;
 
 import com.distributed_cache.caching_service.dto.RequestDTO;
 import com.distributed_cache.caching_service.entity.CacheEventSource;
-import com.distributed_cache.caching_service.repository.CacheRepository;
+import com.distributed_cache.caching_service.service.DatabaseService;
 import com.distributed_cache.caching_service.utils.CacheStore;
 import com.distributed_cache.caching_service.utils.CacheValue;
-import com.distributed_cache.caching_service.utils.OperationType;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Component;
 
@@ -17,38 +17,46 @@ import java.util.List;
 public class ListHandler implements DataObject {
 
     private final CacheStore cacheStore;
-    private final CacheRepository cacheRepository;
+    private final DatabaseService databaseService;
     private final ModelMapper mapper;
+    private final ObjectMapper objectMapper;
 
     public ListHandler(
             CacheStore cacheStore,
-            CacheRepository cacheRepository,
-            ModelMapper mapper) {
+            DatabaseService databaseService,
+            ModelMapper mapper,
+            ObjectMapper objectMapper) {
+
         this.cacheStore = cacheStore;
-        this.cacheRepository = cacheRepository;
+        this.databaseService = databaseService;
         this.mapper = mapper;
+        this.objectMapper = objectMapper;
     }
 
     @Override
-    public Boolean execute(RequestDTO requestDTO) throws Exception {
-        String key = requestDTO.getKey();
-        Object lockKey = cacheStore.getLock(key);
+    public Boolean execute(
+            RequestDTO requestDTO,
+            Boolean isSync) throws Exception {
 
-        synchronized (lockKey) {
+        String key = requestDTO.getKey();
+
+        synchronized (cacheStore.getLock(key)) {
             return switch (requestDTO.getOperationType()) {
-                case APPEND -> append(requestDTO);
-                case POP -> pop(requestDTO);
+                case APPEND -> append(requestDTO, isSync);
+                case POP -> pop(requestDTO, isSync);
+
                 default -> throw new IllegalArgumentException(
-                        "Operation not supported on LIST");
+                        "Operation not supported on LIST"
+                );
             };
         }
     }
 
     @Override
     public Object read(String key, String path) {
-        Object lockKey = cacheStore.getLock(key);
 
-        synchronized (lockKey) {
+        synchronized (cacheStore.getLock(key)) {
+
             CacheValue current =
                     cacheStore.inMemoryCache.get(key);
 
@@ -58,14 +66,42 @@ public class ListHandler implements DataObject {
 
             if (!(current.getValue() instanceof List<?> list)) {
                 throw new IllegalStateException(
-                        "Cached value is not a LIST");
+                        "Cached value is not a LIST"
+                );
             }
 
             return new ArrayList<>(list);
         }
     }
 
-    public Boolean append(RequestDTO requestDTO) {
+    private void persistEvent(
+            RequestDTO requestDTO,
+            int newVersion) throws Exception {
+
+        CacheEventSource event =
+                mapper.map(
+                        requestDTO,
+                        CacheEventSource.class
+                );
+
+        // Serialize the value so the event can be replayed.
+        event.setValue(
+                objectMapper.writeValueAsString(
+                        requestDTO.getValue()
+                )
+        );
+
+        event.setReplicationStatus(false);
+        event.setVersionNumber(newVersion);
+
+        // Checks fencing and persists in one transaction.
+        databaseService.saveEventIfLeader(event);
+    }
+
+    public Boolean append(
+            RequestDTO requestDTO,
+            Boolean isSync) throws Exception {
+
         String key = requestDTO.getKey();
 
         CacheValue current =
@@ -76,36 +112,45 @@ public class ListHandler implements DataObject {
         int newVersion;
 
         if (current == null) {
+
             newVersion = 1;
+
         } else {
+
             if (!(current.getValue() instanceof List<?> oldList)) {
                 throw new IllegalArgumentException(
-                        "Existing value is not a LIST");
+                        "Existing value is not a LIST"
+                );
             }
 
             newList.addAll(oldList);
+
             newVersion = Math.addExact(
-                    current.getVersionNumber(), 1);
+                    current.getVersionNumber(), 1
+            );
         }
 
         newList.add(requestDTO.getValue());
 
-        CacheEventSource event =
-                mapper.map(requestDTO, CacheEventSource.class);
+        // Normal writes go through DatabaseService.
+        if (!Boolean.TRUE.equals(isSync)) {
+            persistEvent(requestDTO, newVersion);
+        }
 
-        event.setReplicationStatus(false);
-        event.setVersionNumber(newVersion);
-
-        cacheRepository.save(event);
-
+        // Update memory only after persistence succeeds,
+        // or immediately for synchronization.
         cacheStore.inMemoryCache.put(
                 key,
-                new CacheValue(newList, newVersion));
+                new CacheValue(newList, newVersion)
+        );
 
         return true;
     }
 
-    public Boolean pop(RequestDTO requestDTO) {
+    public Boolean pop(
+            RequestDTO requestDTO,
+            Boolean isSync) throws Exception {
+
         String key = requestDTO.getKey();
 
         CacheValue current =
@@ -113,17 +158,20 @@ public class ListHandler implements DataObject {
 
         if (current == null) {
             throw new IllegalArgumentException(
-                    "Key does not exist");
+                    "Key does not exist"
+            );
         }
 
         if (!(current.getValue() instanceof List<?> oldList)) {
             throw new IllegalArgumentException(
-                    "Existing value is not a LIST");
+                    "Existing value is not a LIST"
+            );
         }
 
         if (oldList.isEmpty()) {
             throw new IllegalStateException(
-                    "Cannot POP from an empty list");
+                    "Cannot POP from an empty list"
+            );
         }
 
         List<Object> newList = new ArrayList<>(oldList);
@@ -132,19 +180,17 @@ public class ListHandler implements DataObject {
         newList.remove(newList.size() - 1);
 
         int newVersion = Math.addExact(
-                current.getVersionNumber(), 1);
+                current.getVersionNumber(), 1
+        );
 
-        CacheEventSource event =
-                mapper.map(requestDTO, CacheEventSource.class);
-
-        event.setReplicationStatus(false);
-        event.setVersionNumber(newVersion);
-
-        cacheRepository.save(event);
+        if (!Boolean.TRUE.equals(isSync)) {
+            persistEvent(requestDTO, newVersion);
+        }
 
         cacheStore.inMemoryCache.put(
                 key,
-                new CacheValue(newList, newVersion));
+                new CacheValue(newList, newVersion)
+        );
 
         return true;
     }

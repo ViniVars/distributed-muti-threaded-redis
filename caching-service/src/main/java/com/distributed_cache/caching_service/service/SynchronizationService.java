@@ -10,6 +10,7 @@ import com.distributed_cache.caching_service.utils.CacheStore;
 import com.distributed_cache.caching_service.utils.CacheValue;
 import com.distributed_cache.caching_service.utils.DataObjectType;
 import com.distributed_cache.caching_service.utils.OperationType;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.MapEntry;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Component;
@@ -24,17 +25,22 @@ public class SynchronizationService {
     private final CacheStore cacheStore;
     private final CacheRepository cacheRepository;
     private final DataObjectFactory dataObjectFactory;
-    private final ModelMapper modelMapper;
+    private final ObjectMapper objectMapper;
 
-    public SynchronizationService(CacheStore cacheStore, CacheRepository cacheRepository, DataObjectFactory dataObjectFactory, ModelMapper modelMapper) {
+    public SynchronizationService(CacheStore cacheStore, CacheRepository cacheRepository, DataObjectFactory dataObjectFactory, ObjectMapper objectMapper) {
         this.cacheStore = cacheStore;
         this.cacheRepository = cacheRepository;
         this.dataObjectFactory = dataObjectFactory;
-        this.modelMapper = modelMapper;
+        this.objectMapper = objectMapper;
     }
 
 
+
+
+
     public void snapshotSync(){
+
+
 
     }
 
@@ -45,17 +51,23 @@ public class SynchronizationService {
 
         for (CacheEventSource cacheEvent : cacheEventSourceList) {
             String key = cacheEvent.getKey();
-//            String value = cacheEvent.getValue();
-//            OperationType operationType = cacheEvent.getOperationType();
+            String value = cacheEvent.getValue();
+            OperationType operationType = cacheEvent.getOperationType();
             DataObjectType dataObjectType = cacheEvent.getDataObjectType();
             Integer version = cacheEvent.getVersionNumber();
 
-            if (cacheStore.inMemoryCache.get(key).getVersionNumber() < version) {
+            Integer inMemoryVersionNumber = cacheStore.inMemoryCache.get(key) == null ? 0 : cacheStore.inMemoryCache.get(key).getVersionNumber();
+
+            if (inMemoryVersionNumber + 1 == version) {
 
                 DataObject dataObject = dataObjectFactory.create(dataObjectType);
-                RequestDTO requestDTO = modelMapper.map(cacheEvent, RequestDTO.class);
-                dataObject.execute(requestDTO);
-
+                RequestDTO requestDTO = new RequestDTO();
+                requestDTO.setKey(key);
+                requestDTO.setOperationType(operationType);
+                requestDTO.setPath(cacheEvent.getPath());
+                requestDTO.setValue(objectMapper.readValue(value, Object.class));
+                dataObject.execute(requestDTO, true);
+                cacheStore.inMemoryCache.get(key).setVersionNumber(version);
             }
         }
 

@@ -3,7 +3,7 @@ package com.distributed_cache.caching_service.commons;
 
 import com.distributed_cache.caching_service.dto.RequestDTO;
 import com.distributed_cache.caching_service.entity.CacheEventSource;
-import com.distributed_cache.caching_service.repository.CacheRepository;
+import com.distributed_cache.caching_service.service.DatabaseService;
 import com.distributed_cache.caching_service.utils.CacheStore;
 import com.distributed_cache.caching_service.utils.CacheValue;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -16,30 +16,33 @@ import org.springframework.stereotype.Component;
 public class JsonHandler implements DataObject {
 
     private final CacheStore cacheStore;
-    private final CacheRepository cacheRepository;
+    private final DatabaseService databaseService;
     private final ModelMapper mapper;
     private final ObjectMapper objectMapper;
 
     public JsonHandler(
             CacheStore cacheStore,
-            CacheRepository cacheRepository,
+            DatabaseService databaseService,
             ModelMapper mapper,
             ObjectMapper objectMapper) {
 
         this.cacheStore = cacheStore;
-        this.cacheRepository = cacheRepository;
+        this.databaseService = databaseService;
         this.mapper = mapper;
         this.objectMapper = objectMapper;
     }
 
     @Override
-    public Boolean execute(RequestDTO requestDTO) throws Exception {
+    public Boolean execute(
+            RequestDTO requestDTO,
+            Boolean isSync) throws Exception {
 
         String key = requestDTO.getKey();
 
         synchronized (cacheStore.getLock(key)) {
             return switch (requestDTO.getOperationType()) {
-                case SET -> set(requestDTO);
+                case SET -> set(requestDTO, isSync);
+
                 default -> throw new IllegalArgumentException(
                         "Operation not supported on JSON"
                 );
@@ -62,7 +65,7 @@ public class JsonHandler implements DataObject {
             JsonNode root =
                     objectMapper.valueToTree(current.getValue());
 
-            // Empty path means read the complete JSON document.
+            // Empty path reads the complete JSON document.
             if (path == null || path.isBlank()) {
                 return objectMapper.convertValue(
                         root,
@@ -98,8 +101,9 @@ public class JsonHandler implements DataObject {
         }
     }
 
-
-    public Boolean set(RequestDTO requestDTO) throws Exception {
+    public Boolean set(
+            RequestDTO requestDTO,
+            Boolean isSync) throws Exception {
 
         String key = requestDTO.getKey();
         String path = requestDTO.getPath();
@@ -109,7 +113,7 @@ public class JsonHandler implements DataObject {
 
         JsonNode newRoot;
 
-        // Empty path: replace the entire JSON document.
+        // Empty path replaces the complete JSON document.
         if (path == null || path.isBlank()) {
 
             newRoot = objectMapper.valueToTree(
@@ -124,7 +128,7 @@ public class JsonHandler implements DataObject {
 
         } else {
 
-            // A nested update requires an existing JSON document.
+            // Nested updates require an existing JSON document.
             if (current == null) {
                 throw new IllegalArgumentException(
                         "Cannot create a nested path in a missing JSON key"
@@ -140,28 +144,32 @@ public class JsonHandler implements DataObject {
                 );
             }
 
-            // Never modify the currently cached object directly.
+            // Do not mutate the cached object directly.
             newRoot = oldRoot.deepCopy();
 
             String[] parts = parsePath(path);
             ObjectNode parent = (ObjectNode) newRoot;
 
-            // Create missing intermediate objects when necessary.
+            // Create missing intermediate objects.
             for (int i = 0; i < parts.length - 1; i++) {
 
                 String part = parts[i];
                 JsonNode child = parent.get(part);
 
                 if (child == null) {
-                    ObjectNode newChild = objectMapper.createObjectNode();
+
+                    ObjectNode newChild =
+                            objectMapper.createObjectNode();
 
                     parent.set(part, newChild);
                     parent = newChild;
 
                 } else if (child.isObject()) {
+
                     parent = (ObjectNode) child;
 
                 } else {
+
                     throw new IllegalArgumentException(
                             "Cannot create path '" + path
                                     + "': field '" + part
@@ -194,25 +202,31 @@ public class JsonHandler implements DataObject {
                 1
         );
 
-        CacheEventSource event =
-                mapper.map(
-                        requestDTO,
-                        CacheEventSource.class
-                );
+        // Normal writes use the transactional database service.
+        if (!Boolean.TRUE.equals(isSync)) {
 
-        event.setValue(
-                objectMapper.writeValueAsString(
-                        requestDTO.getValue()
-                )
-        );
+            CacheEventSource event =
+                    mapper.map(
+                            requestDTO,
+                            CacheEventSource.class
+                    );
 
-//        event.setDataType("JSON");
-        event.setReplicationStatus(false);
-        event.setVersionNumber(newVersion);
+            // Store the requested value and retain the path
+            // through the mapped RequestDTO fields.
+            event.setValue(
+                    objectMapper.writeValueAsString(
+                            requestDTO.getValue()
+                    )
+            );
 
-        // Save the event before updating the cache.
-        cacheRepository.save(event);
+            event.setReplicationStatus(false);
+            event.setVersionNumber(newVersion);
 
+            databaseService.saveEventIfLeader(event);
+        }
+
+        // Synchronization and successful normal writes
+        // both update the in-memory cache.
         cacheStore.inMemoryCache.put(
                 key,
                 new CacheValue(newRoot, newVersion)
@@ -220,7 +234,6 @@ public class JsonHandler implements DataObject {
 
         return true;
     }
-
 
     private String[] parsePath(String path) {
 
