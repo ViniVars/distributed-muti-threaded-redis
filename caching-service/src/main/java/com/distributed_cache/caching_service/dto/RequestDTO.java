@@ -8,6 +8,7 @@ import lombok.NoArgsConstructor;
 import lombok.NonNull;
 
 import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 
 @Data
 @NoArgsConstructor
@@ -22,9 +23,12 @@ public class RequestDTO {
     @NonNull
     private Object value;
     private String path;
-//    @NonNull
-//    private LocalDateTime timeStamp;
-    private LocalDateTime ttl;
+
+    @NonNull
+    private OffsetDateTime timeStamp;
+
+    @NonNull
+    private Long ttl;
     private Long shardID = 0L;
 
 }

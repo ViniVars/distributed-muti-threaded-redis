@@ -3,6 +3,8 @@ package com.distributed_cache.caching_service.commons;
 import lombok.Data;
 import org.springframework.stereotype.Component;
 
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.UUID;
 
 @Component
@@ -14,4 +16,5 @@ public class GlobalVariableClass {
     public String InstanceID = UUID.randomUUID().toString();
     public volatile Long FencingToken = -99L;
     public volatile Long ShardID = 0L;
+    public Long lastEventCheckpoint = 0L;
 }

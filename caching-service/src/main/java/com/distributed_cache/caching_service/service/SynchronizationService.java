@@ -7,10 +7,10 @@ import com.distributed_cache.caching_service.commons.GlobalVariableClass;
 import com.distributed_cache.caching_service.dto.RequestDTO;
 import com.distributed_cache.caching_service.entity.CacheEventSource;
 import com.distributed_cache.caching_service.entity.SnapshotData;
-import com.distributed_cache.caching_service.entity.SnapshotMetadata;
+import com.distributed_cache.caching_service.entity.ShardMetadata;
 import com.distributed_cache.caching_service.repository.CacheRepository;
 import com.distributed_cache.caching_service.repository.SnapshotDataRepository;
-import com.distributed_cache.caching_service.repository.SnapshotMetadataRepository;
+import com.distributed_cache.caching_service.repository.ShardMetadataRepository;
 import com.distributed_cache.caching_service.utils.CacheStore;
 import com.distributed_cache.caching_service.utils.CacheValue;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -18,7 +18,6 @@ import org.springframework.stereotype.Component;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 @Component
@@ -29,16 +28,16 @@ public class SynchronizationService {
     private final CacheRepository cacheRepository;
     private final DataObjectFactory dataObjectFactory;
     private final ObjectMapper objectMapper;
-    private final SnapshotMetadataRepository snapshotMetadataRepository;
+    private final ShardMetadataRepository shardMetadataRepository;
     private final SnapshotDataRepository snapshotDataRepository;
     private final GlobalVariableClass globalVariableClass;
 
-    public SynchronizationService(CacheStore cacheStore, CacheRepository cacheRepository, DataObjectFactory dataObjectFactory, ObjectMapper objectMapper, SnapshotMetadataRepository snapshotMetadataRepository, SnapshotDataRepository snapshotDataRepository, GlobalVariableClass globalVariableClass) {
+    public SynchronizationService(CacheStore cacheStore, CacheRepository cacheRepository, DataObjectFactory dataObjectFactory, ObjectMapper objectMapper, ShardMetadataRepository shardMetadataRepository, SnapshotDataRepository snapshotDataRepository, GlobalVariableClass globalVariableClass) {
         this.cacheStore = cacheStore;
         this.cacheRepository = cacheRepository;
         this.dataObjectFactory = dataObjectFactory;
         this.objectMapper = objectMapper;
-        this.snapshotMetadataRepository = snapshotMetadataRepository;
+        this.shardMetadataRepository = shardMetadataRepository;
         this.snapshotDataRepository = snapshotDataRepository;
         this.globalVariableClass = globalVariableClass;
     }
@@ -91,26 +90,21 @@ public class SynchronizationService {
 
         Long shardId = globalVariableClass.getShardID();
 
-        Optional<SnapshotMetadata> metadataOptional =
-                snapshotMetadataRepository.findByShardId(shardId);
+        Optional<ShardMetadata> metadataOptional =
+                shardMetadataRepository.findByShardId(shardId);
 
         // Recovery must start from a clean cache.
         cacheStore.inMemoryCache.clear();
 
-        OffsetDateTime lastProcessedTimeStamp =
-                OffsetDateTime.of(
-                        1900, 1, 1,
-                        0, 0, 0, 0,
-                        ZoneOffset.UTC
-                );
+        Long processedEventIdPosition = globalVariableClass.getLastEventCheckpoint();
 
-        if (metadataOptional.isPresent()) {
+        if (metadataOptional.isPresent() && metadataOptional.get().getLastEventIdPosition() > processedEventIdPosition) {
 
-            SnapshotMetadata metadata = metadataOptional.get();
+            ShardMetadata metadata = metadataOptional.get();
 
-            lastProcessedTimeStamp = metadata.getCreatedAt();
+            processedEventIdPosition = metadata.getLastEventIdPosition();
 
-            Long snapshotVersion = metadata.getLastEventPosition();
+            Long snapshotVersion = metadata.getLastSnapshotVersion();
 
             List<SnapshotData> snapshotDataList =
                     snapshotDataRepository.getSnapshotData(
@@ -132,32 +126,12 @@ public class SynchronizationService {
 
         List<CacheEventSource> events =
                 cacheRepository.getCacheEventSnapshotSync(
-                        shardId, lastProcessedTimeStamp
+                        shardId, processedEventIdPosition
                 );
 
         for (CacheEventSource event : events) {
             replayEvent(event);
         }
     }
-
-    public void outboxSync() throws Exception {
-
-//        List<CacheEventSource> cacheEventSourceList = cacheRepository.getCacheEventOutboxSync(globalVariableClass.getShardID());
-//
-//
-//        for (CacheEventSource cacheEvent : cacheEventSourceList) {
-//            replayEvent(cacheEvent);
-//        }
-
-        for (Map.Entry<String, CacheValue> entry :
-                cacheStore.inMemoryCache.entrySet()) {
-
-            System.out.println("Key: " + entry.getKey());
-            System.out.println("Value: " + entry.getValue().getValue());
-            System.out.println("Version: " + entry.getValue().getVersionNumber());
-        }
-
-    }
-
 
 }

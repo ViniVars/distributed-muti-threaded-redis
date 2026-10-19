@@ -63,7 +63,9 @@ public class IntHandler implements DataObject {
 
         CacheValue current = cacheStore.inMemoryCache.get(key);
 
-        return current == null
+
+
+        return (current == null)
                 ? null
                 : current.getValue();
     }

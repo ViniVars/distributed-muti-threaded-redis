@@ -27,13 +27,13 @@ public interface CacheRepository extends JpaRepository<CacheEventSource, Integer
     @Query("""
     SELECT ces
     FROM CacheEventSource ces
-    WHERE ces.timeStamp >= :time_stamp
+    WHERE ces.eventSourceId > :eventSourceId
       AND ces.shardID = :ShardID
     ORDER BY ces.key ASC, ces.versionNumber ASC
     """)
     List<CacheEventSource> getCacheEventSnapshotSync(
             @Param("ShardID") Long shardID
-            , @Param("time_stamp")OffsetDateTime timeStamp
+            , @Param("eventSourceId")Long eventSourceId
             );
 
 }
