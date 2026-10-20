@@ -3,11 +3,8 @@ package com.distributed_cache.caching_service.commons.handlers;
 
 import com.distributed_cache.caching_service.commons.commands.*;
 import com.distributed_cache.caching_service.dto.RequestDTO;
+
 import com.distributed_cache.caching_service.entity.CacheEventSource;
-import com.distributed_cache.caching_service.service.DatabaseService;
-import com.distributed_cache.caching_service.utils.CacheStore;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Component;
 
 @Component
@@ -27,18 +24,16 @@ public class IntHandler implements DataObject {
         this.generalReadCommand = generalReadCommand;
     }
 
-    private int requireInteger(Object value) {
+    private void requireInteger(Object value) {
         if (!(value instanceof Integer number)) {
             throw new IllegalArgumentException("Expected an integer value");
         }
-
-        return number;
     }
 
     @Override
-    public Boolean execute(RequestDTO requestDTO, Boolean isSync) throws Exception {
+    public Boolean execute(RequestDTO requestDTO) throws Exception {
 
-        Integer value = requireInteger(requestDTO.getValue());
+        requireInteger(requestDTO.getValue());
 
         WriteCommand writeCommand = switch (requestDTO.getOperationType()) {
             case SET -> intSetCommand;
@@ -50,7 +45,24 @@ public class IntHandler implements DataObject {
             );
         };
 
-        return writeCommand.execute(requestDTO, value);
+        return writeCommand.execute(requestDTO);
+    }
+
+    public Boolean executeSync(CacheEventSource cacheEventSource) throws Exception {
+
+        requireInteger(cacheEventSource.getValue());
+
+        WriteCommand writeCommand = switch (cacheEventSource.getOperationType()) {
+            case SET -> intSetCommand;
+            case INC -> intIncCommand;
+            case DRC -> intDrcCommand;
+
+            default -> throw new IllegalArgumentException(
+                    "Operation not supported on INT"
+            );
+        };
+
+        return writeCommand.executeSync(cacheEventSource);
     }
 
     @Override

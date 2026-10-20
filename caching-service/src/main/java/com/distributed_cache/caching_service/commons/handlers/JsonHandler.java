@@ -32,7 +32,7 @@ public class JsonHandler implements DataObject {
         this.objectMapper = objectMapper;
     }
 
-    @Override
+
     public Boolean execute(
             RequestDTO requestDTO,
             Boolean isSync) throws Exception {
@@ -44,6 +44,16 @@ public class JsonHandler implements DataObject {
                     "Operation not supported on JSON"
             );
         };
+    }
+
+    @Override
+    public Boolean execute(RequestDTO requestDTO) throws Exception {
+        return null;
+    }
+
+    @Override
+    public Boolean executeSync(CacheEventSource cacheEventSource) throws Exception {
+        return null;
     }
 
     @Override

@@ -7,11 +7,6 @@ import org.springframework.stereotype.Component;
 
 @Component
 public interface WriteCommand {
-
-
-
-    Boolean execute(RequestDTO requestDTO, Integer updationValue) throws Exception;
+    Boolean execute(RequestDTO requestDTO) throws Exception;
     Boolean executeSync(CacheEventSource cacheEventSource) throws Exception;
-
-
 }

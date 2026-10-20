@@ -65,22 +65,21 @@ public class SynchronizationService {
             );
         }
 
-        DataObject dataObject =
-                dataObjectFactory.create(cacheEvent.getDataObjectType());
 
-        RequestDTO requestDTO = new RequestDTO();
-        requestDTO.setKey(key);
-        requestDTO.setOperationType(cacheEvent.getOperationType());
-        requestDTO.setPath(cacheEvent.getPath());
-        requestDTO.setValue(
-                objectMapper.readValue(
-                        cacheEvent.getValue(),
-                        Object.class
-                )
-        );
+
+//        RequestDTO requestDTO = new RequestDTO();
+//        requestDTO.setKey(key);
+//        requestDTO.setOperationType(cacheEvent.getOperationType());
+//        requestDTO.setPath(cacheEvent.getPath());
+//        requestDTO.setValue(
+//                objectMapper.readValue(
+//                        cacheEvent.getValue(),
+//                        Object.class
+//                )
+//        );
 
         // Apply to memory only; do not write to the database.
-        dataObject.execute(requestDTO, true);
+
     }
 
 
@@ -92,11 +91,9 @@ public class SynchronizationService {
                 shardMetadataRepository.findByShardId(shardId);
 
 
-        Long processedEventIdPosition = globalVariableClass.getLastEventCheckpoint();
 
-        if(metadataOptional.isPresent() && Objects.equals(metadataOptional.get().getLastEventIdPosition(), processedEventIdPosition)){
-            return;
-        }
+        Integer processedEventIdPosition = globalVariableClass.getLastEventCheckpoint();
+
 
         if (metadataOptional.isPresent() && metadataOptional.get().getLastEventIdPosition() > processedEventIdPosition) {
 
@@ -105,14 +102,11 @@ public class SynchronizationService {
 
             ShardMetadata metadata = metadataOptional.get();
 
-            processedEventIdPosition = metadata.getLastEventIdPosition();
+            processedEventIdPosition = Math.toIntExact(metadata.getLastEventIdPosition());
 
             Long snapshotVersion = metadata.getLastSnapshotVersion();
 
-            List<SnapshotData> snapshotDataList =
-                    snapshotDataRepository.getSnapshotData(
-                            shardId, snapshotVersion
-                    );
+            List<SnapshotData> snapshotDataList = snapshotDataRepository.getSnapshotData(shardId, snapshotVersion);
 
             for (SnapshotData snapshotData : snapshotDataList) {
 
@@ -129,11 +123,12 @@ public class SynchronizationService {
 
         List<CacheEventSource> events =
                 cacheRepository.getCacheEventSnapshotSync(
-                        shardId, processedEventIdPosition
+                        shardId, Long.valueOf(processedEventIdPosition)
                 );
 
         for (CacheEventSource event : events) {
-            replayEvent(event);
+            DataObject dataObject = dataObjectFactory.create(event.getDataObjectType());
+            dataObject.executeSync(event);
         }
     }
 

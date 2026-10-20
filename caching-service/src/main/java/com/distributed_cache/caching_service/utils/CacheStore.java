@@ -17,6 +17,8 @@ public class CacheStore {
 
     public ConcurrentHashMap<String, CacheValue> inMemoryCache = new ConcurrentHashMap<>();
 
+    public final Object inMemoryCacheLock;
+
     private final ConcurrentHashMap<String, ReentrantReadWriteLock> inMemoryLock = new ConcurrentHashMap<>();
 
     private final ConcurrentHashMap<String, PriorityQueue<CacheEventSource>> inMemoryMinHeap = new ConcurrentHashMap<>();
@@ -40,9 +42,7 @@ public class CacheStore {
                         )
                 );
 
-        synchronized (minHeap) {
-            minHeap.add(cacheEventSource);
-        }
+        minHeap.add(cacheEventSource);
     }
 
 
@@ -53,10 +53,8 @@ public class CacheStore {
             return;
         }
 
-        synchronized (minHeap) {
-            while (!minHeap.isEmpty() && minHeap.peek().getVersionNumber() < version) {
-                minHeap.poll();
-            }
+        while (!minHeap.isEmpty() && minHeap.peek().getVersionNumber() < version) {
+            minHeap.poll();
         }
     }
 
@@ -70,13 +68,10 @@ public class CacheStore {
             return null;
         }
 
-        synchronized (minHeap) {
-
-            if(minHeap.peek().getVersionNumber().equals(currentVersion + 1)){
-                cacheEventSource = minHeap.peek();
-                minHeap.poll();
-                return cacheEventSource;
-            }
+        if(minHeap.peek().getVersionNumber().equals(currentVersion + 1)){
+            cacheEventSource = minHeap.peek();
+            minHeap.poll();
+            return cacheEventSource;
         }
 
         return cacheEventSource;

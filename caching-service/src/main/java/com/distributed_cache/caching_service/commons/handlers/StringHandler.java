@@ -40,7 +40,7 @@ public class StringHandler implements DataObject {
         return string;
     }
 
-    @Override
+
     public Boolean execute(
             RequestDTO requestDTO,
             Boolean isSync) throws Exception {
@@ -54,6 +54,16 @@ public class StringHandler implements DataObject {
                     "Operation not supported on STRING"
             );
         };
+    }
+
+    @Override
+    public Boolean execute(RequestDTO requestDTO) throws Exception {
+        return null;
+    }
+
+    @Override
+    public Boolean executeSync(CacheEventSource cacheEventSource) throws Exception {
+        return null;
     }
 
     @Override

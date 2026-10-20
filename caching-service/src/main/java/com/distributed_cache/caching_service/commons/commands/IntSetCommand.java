@@ -4,7 +4,6 @@ import com.distributed_cache.caching_service.commons.GlobalVariableClass;
 import com.distributed_cache.caching_service.dto.RequestDTO;
 import com.distributed_cache.caching_service.entity.CacheEventSource;
 import com.distributed_cache.caching_service.service.DatabaseService;
-import com.distributed_cache.caching_service.service.SynchronizationService;
 import com.distributed_cache.caching_service.utils.CacheStore;
 import com.distributed_cache.caching_service.utils.CacheValue;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -52,12 +51,20 @@ public class IntSetCommand implements WriteCommand {
     }
 
 
+
+
     @Override
-    public Boolean execute(RequestDTO requestDTO, Integer updationValue) throws Exception {
-        String key = requestDTO.getKey();
+    public Boolean execute(RequestDTO requestDTO) throws Exception {
 
         CacheEventSource event = createEvent(requestDTO);
         event = databaseService.saveEventIfLeader(event);
+        return executeSync(event);
+
+    }
+
+    @Override
+    public Boolean executeSync(CacheEventSource event) throws Exception {
+        String key = event.getKey();
 
         ReentrantReadWriteLock lock = cacheStore.getLock(key);
         lock.writeLock().lock();
@@ -67,7 +74,7 @@ public class IntSetCommand implements WriteCommand {
             CacheValue cacheValue = cacheStore.inMemoryCache.get(key);
 
             Integer currentVersionNumber = (cacheValue != null) ? cacheValue.getVersionNumber() : 0;
-
+            Integer updationValue = objectMapper.convertValue(event.getValue() , Integer.class);
 
             if(event.getVersionNumber() > currentVersionNumber){
                 cacheStore.inMemoryCache.put(key, new CacheValue(updationValue, event.getVersionNumber()));
@@ -91,10 +98,5 @@ public class IntSetCommand implements WriteCommand {
 
 
         return true;
-    }
-
-    @Override
-    public Boolean executeSync(CacheEventSource cacheEventSource) throws Exception {
-        return null;
     }
 }

@@ -52,13 +52,18 @@ public class IntIncCommand implements WriteCommand {
 
 
     @Override
-    public Boolean execute(RequestDTO requestDTO, Integer updationValue) throws Exception {
-        String key = requestDTO.getKey();
+    public Boolean execute(RequestDTO requestDTO) throws Exception {
 
         CacheEventSource event = createEvent(requestDTO);
         event = databaseService.saveEventIfLeader(event);
 
 
+        return executeSync(event);
+    }
+
+    @Override
+    public Boolean executeSync(CacheEventSource event) {
+        String key = event.getKey();
         ReentrantReadWriteLock lock = cacheStore.getLock(key);
         lock.writeLock().lock();
 
@@ -69,6 +74,7 @@ public class IntIncCommand implements WriteCommand {
             Integer currentVersionNumber = (cacheValue != null) ? cacheValue.getVersionNumber() : 0;
             Object currentValue = (cacheValue != null) ? cacheValue.getValue() : null;
             Integer cacheIntegerValue = objectMapper.convertValue(currentValue, Integer.class);
+            Integer updationValue = objectMapper.convertValue(event.getValue(), Integer.class);
 
             if(event.getVersionNumber().equals(currentVersionNumber + 1)){
                 cacheStore.inMemoryCache.put(key, new CacheValue(cacheIntegerValue + updationValue, event.getVersionNumber()));
@@ -97,10 +103,5 @@ public class IntIncCommand implements WriteCommand {
 
 
         return true;
-    }
-
-    @Override
-    public Boolean executeSync(CacheEventSource cacheEventSource) throws Exception {
-        return null;
     }
 }

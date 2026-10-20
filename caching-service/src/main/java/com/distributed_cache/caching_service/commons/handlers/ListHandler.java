@@ -33,7 +33,7 @@ public class ListHandler implements DataObject {
         this.objectMapper = objectMapper;
     }
 
-    @Override
+
     public Boolean execute(
             RequestDTO requestDTO,
             Boolean isSync) throws Exception {
@@ -46,6 +46,16 @@ public class ListHandler implements DataObject {
                     "Operation not supported on LIST"
             );
         };
+    }
+
+    @Override
+    public Boolean execute(RequestDTO requestDTO) throws Exception {
+        return null;
+    }
+
+    @Override
+    public Boolean executeSync(CacheEventSource cacheEventSource) throws Exception {
+        return null;
     }
 
     @Override

@@ -56,7 +56,7 @@ public class LeadershipService {
     @Scheduled(fixedDelay = 2000)
     public void electionTick() {
 
-        if (!globalVariableClass.isSnapped()){
+        if (!globalVariableClass.isSnapped){
             return;
         }
 

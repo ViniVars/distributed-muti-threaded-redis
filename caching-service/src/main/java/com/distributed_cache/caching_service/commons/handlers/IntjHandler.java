@@ -12,7 +12,7 @@ import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Component;
 
 @Component
-public class IntHandler implements DataObject {
+public class IntjHandler implements DataObject {
 
     private final CacheStore cacheStore;
     private final DatabaseService databaseService;
@@ -20,7 +20,7 @@ public class IntHandler implements DataObject {
     private final ObjectMapper objectMapper;
 
 
-    public IntHandler(
+    public IntjHandler(
             CacheStore cacheStore,
             DatabaseService databaseService,
             ModelMapper modelMapper,
@@ -42,7 +42,7 @@ public class IntHandler implements DataObject {
         return number;
     }
 
-    @Override
+
     public Boolean execute(
             RequestDTO requestDTO,
             Boolean isSync) throws Exception {
@@ -58,6 +58,16 @@ public class IntHandler implements DataObject {
                     "Operation not supported on INT"
             );
         };
+    }
+
+    @Override
+    public Boolean execute(RequestDTO requestDTO) throws Exception {
+        return null;
+    }
+
+    @Override
+    public Boolean executeSync(CacheEventSource cacheEventSource) throws Exception {
+        return null;
     }
 
     @Override
