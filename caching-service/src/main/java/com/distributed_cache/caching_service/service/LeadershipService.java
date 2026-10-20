@@ -65,9 +65,15 @@ public class LeadershipService {
                     .readNamespacedLease(LEASE_NAME, NAMESPACE)
                     .execute();
 
+            if(lease == null){
+                return;
+            }
+
             OffsetDateTime now =
                     OffsetDateTime.now(ZoneOffset.UTC);
 
+
+            assert lease.getSpec() != null;
             String holder =
                     lease.getSpec().getHolderIdentity();
 
@@ -137,11 +143,6 @@ public class LeadershipService {
                     globalVariableClass.setReady(true);
 
                 }
-//                else {
-//                    System.out.println("Lease renewed.");
-//                }
-
-//                System.out.println(globalVariableClass.getFencingToken());
 
             } else {
 

@@ -67,11 +67,6 @@ public class CacheController {
         }
     }
 
-    @PutMapping("/outbox")
-    public void sjdfnsdn() throws Exception {
-        synchronizationService.outboxSync();
-    }
-
     @PutMapping("/snapshot")
     public void jbfjkse() throws Exception {
         synchronizationService.snapshotSync();

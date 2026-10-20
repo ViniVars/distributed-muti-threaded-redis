@@ -4,7 +4,6 @@ package com.distributed_cache.caching_service.service;
 import com.distributed_cache.caching_service.commons.handlers.DataObject;
 import com.distributed_cache.caching_service.commons.DataObjectFactory;
 import com.distributed_cache.caching_service.commons.GlobalVariableClass;
-import com.distributed_cache.caching_service.dto.RequestDTO;
 import com.distributed_cache.caching_service.entity.CacheEventSource;
 import com.distributed_cache.caching_service.entity.SnapshotData;
 import com.distributed_cache.caching_service.entity.ShardMetadata;
@@ -17,7 +16,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
-import java.util.Objects;
 import java.util.Optional;
 
 @Component
@@ -27,61 +25,18 @@ public class SynchronizationService {
     private final CacheStore cacheStore;
     private final CacheRepository cacheRepository;
     private final DataObjectFactory dataObjectFactory;
-    private final ObjectMapper objectMapper;
     private final ShardMetadataRepository shardMetadataRepository;
     private final SnapshotDataRepository snapshotDataRepository;
     private final GlobalVariableClass globalVariableClass;
 
-    public SynchronizationService(CacheStore cacheStore, CacheRepository cacheRepository, DataObjectFactory dataObjectFactory, ObjectMapper objectMapper, ShardMetadataRepository shardMetadataRepository, SnapshotDataRepository snapshotDataRepository, GlobalVariableClass globalVariableClass) {
+    public SynchronizationService(CacheStore cacheStore, CacheRepository cacheRepository, DataObjectFactory dataObjectFactory, ShardMetadataRepository shardMetadataRepository, SnapshotDataRepository snapshotDataRepository, GlobalVariableClass globalVariableClass) {
         this.cacheStore = cacheStore;
         this.cacheRepository = cacheRepository;
         this.dataObjectFactory = dataObjectFactory;
-        this.objectMapper = objectMapper;
         this.shardMetadataRepository = shardMetadataRepository;
         this.snapshotDataRepository = snapshotDataRepository;
         this.globalVariableClass = globalVariableClass;
     }
-
-
-    private void replayEvent(CacheEventSource cacheEvent) throws Exception {
-
-        String key = cacheEvent.getKey();
-        Integer eventVersion = cacheEvent.getVersionNumber();
-
-        CacheValue current = cacheStore.inMemoryCache.get(key);
-
-        int currentVersion =
-                current == null ? 0 : current.getVersionNumber();
-
-        // Event was already applied
-        if (eventVersion <= currentVersion) {
-            return;
-        }
-
-        // An event is missing
-        if (eventVersion != currentVersion + 1) {
-            throw new IllegalStateException(
-                    "Version gap for key: " + key
-            );
-        }
-
-
-
-//        RequestDTO requestDTO = new RequestDTO();
-//        requestDTO.setKey(key);
-//        requestDTO.setOperationType(cacheEvent.getOperationType());
-//        requestDTO.setPath(cacheEvent.getPath());
-//        requestDTO.setValue(
-//                objectMapper.readValue(
-//                        cacheEvent.getValue(),
-//                        Object.class
-//                )
-//        );
-
-        // Apply to memory only; do not write to the database.
-
-    }
-
 
     public void snapshotSync() throws Exception {
 

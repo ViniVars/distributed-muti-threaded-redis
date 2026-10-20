@@ -14,60 +14,25 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 public class CacheService {
 
     private final DataObjectFactory dataObjectFactory;
-    private final CacheStore cacheStore;
 
-    public CacheService(
-            DataObjectFactory dataObjectFactory,
-            CacheStore cacheStore) {
-
+    public CacheService(DataObjectFactory dataObjectFactory) {
         this.dataObjectFactory = dataObjectFactory;
-        this.cacheStore = cacheStore;
     }
 
-    public void cacheWriteService(
-            RequestDTO requestDTO) throws Exception {
+    public void cacheWriteService(RequestDTO requestDTO) throws Exception {
 
-        String key = requestDTO.getKey();
+        DataObjectType dataObjectType = requestDTO.getDataObjectType();
+        DataObject dataObject = dataObjectFactory.create(dataObjectType);
+        dataObject.execute(requestDTO);
 
-
-
-        try {
-            DataObjectType dataObjectType =
-                    requestDTO.getDataObjectType();
-
-            DataObject dataObject =
-                    dataObjectFactory.create(dataObjectType);
-
-            dataObject.execute(requestDTO, false);
-
-        } finally {
-            lock.writeLock().unlock();
-        }
     }
 
-    public Object cacheReadService(
-            RequestDTO requestDTO) throws Exception {
+    public Object cacheReadService(RequestDTO requestDTO) throws Exception {
 
-        String key = requestDTO.getKey();
+            String key = requestDTO.getKey();
+            DataObjectType dataObjectType = requestDTO.getDataObjectType();
+            DataObject dataObject = dataObjectFactory.create(dataObjectType);
+            return dataObject.read(key, requestDTO.getPath());
 
-        ReentrantReadWriteLock lock = cacheStore.getLock(key);
-
-        lock.readLock().lock();
-
-        try {
-            DataObjectType dataObjectType =
-                    requestDTO.getDataObjectType();
-
-            DataObject dataObject =
-                    dataObjectFactory.create(dataObjectType);
-
-            return dataObject.read(
-                    key,
-                    requestDTO.getPath()
-            );
-
-        } finally {
-            lock.readLock().unlock();
-        }
     }
 }
