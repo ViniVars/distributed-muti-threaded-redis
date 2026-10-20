@@ -13,23 +13,13 @@ import java.util.List;
 @Repository
 public interface CacheRepository extends JpaRepository<CacheEventSource, Integer> {
 
-    @Query("""
-    SELECT ces
-    FROM CacheEventSource ces
-    WHERE ces.replicationStatus = false
-      AND ces.shardID = :ShardID
-    ORDER BY ces.key ASC, ces.versionNumber ASC
-    """)
-    List<CacheEventSource> getCacheEventOutboxSync(
-            @Param("ShardID") Long shardID
-    );
 
     @Query("""
     SELECT ces
     FROM CacheEventSource ces
     WHERE ces.eventSourceId > :eventSourceId
       AND ces.shardID = :ShardID
-    ORDER BY ces.key ASC, ces.versionNumber ASC
+    ORDER BY ces.eventSourceId ASC
     """)
     List<CacheEventSource> getCacheEventSnapshotSync(
             @Param("ShardID") Long shardID

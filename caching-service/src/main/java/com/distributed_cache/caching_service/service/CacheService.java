@@ -1,7 +1,7 @@
 
 package com.distributed_cache.caching_service.service;
 
-import com.distributed_cache.caching_service.commons.DataObject;
+import com.distributed_cache.caching_service.commons.handlers.DataObject;
 import com.distributed_cache.caching_service.commons.DataObjectFactory;
 import com.distributed_cache.caching_service.dto.RequestDTO;
 import com.distributed_cache.caching_service.utils.CacheStore;
@@ -29,9 +29,7 @@ public class CacheService {
 
         String key = requestDTO.getKey();
 
-        ReentrantReadWriteLock lock = cacheStore.getLock(key);
 
-        lock.writeLock().lock();
 
         try {
             DataObjectType dataObjectType =

@@ -1,7 +1,7 @@
 package com.distributed_cache.caching_service.service;
 
 
-import com.distributed_cache.caching_service.commons.DataObject;
+import com.distributed_cache.caching_service.commons.handlers.DataObject;
 import com.distributed_cache.caching_service.commons.DataObjectFactory;
 import com.distributed_cache.caching_service.commons.GlobalVariableClass;
 import com.distributed_cache.caching_service.dto.RequestDTO;
@@ -15,9 +15,9 @@ import com.distributed_cache.caching_service.utils.CacheStore;
 import com.distributed_cache.caching_service.utils.CacheValue;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
-import java.time.OffsetDateTime;
-import java.time.ZoneOffset;
+
 import java.util.List;
+import java.util.Objects;
 import java.util.Optional;
 
 @Component
@@ -49,8 +49,6 @@ public class SynchronizationService {
         Integer eventVersion = cacheEvent.getVersionNumber();
 
         CacheValue current = cacheStore.inMemoryCache.get(key);
-//        System.out.println(cacheEvent + "\n");
-//        System.out.println(current + "\n\n");
 
         int currentVersion =
                 current == null ? 0 : current.getVersionNumber();
@@ -93,12 +91,17 @@ public class SynchronizationService {
         Optional<ShardMetadata> metadataOptional =
                 shardMetadataRepository.findByShardId(shardId);
 
-        // Recovery must start from a clean cache.
-        cacheStore.inMemoryCache.clear();
 
         Long processedEventIdPosition = globalVariableClass.getLastEventCheckpoint();
 
+        if(metadataOptional.isPresent() && Objects.equals(metadataOptional.get().getLastEventIdPosition(), processedEventIdPosition)){
+            return;
+        }
+
         if (metadataOptional.isPresent() && metadataOptional.get().getLastEventIdPosition() > processedEventIdPosition) {
+
+            // Recovery must start from a clean cache.
+            cacheStore.inMemoryCache.clear();
 
             ShardMetadata metadata = metadataOptional.get();
 

@@ -20,4 +20,16 @@ public class FencingTokenRepository {
             RETURNING fencing_token_id
             """, Long.class, shardId);
     }
+
+    public Long readToken(Long shardId){
+        return jdbcTemplate.queryForObject(
+                """
+                SELECT fencing_token_id
+                FROM fencing_token
+                WHERE shard_id = ?
+                """,
+                Long.class,
+                shardId
+        );
+    }
 }

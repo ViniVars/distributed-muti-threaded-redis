@@ -131,7 +131,7 @@ public class LeadershipService {
                             "Leadership acquired by " + globalVariableClass.getInstanceID());
 
                     globalVariableClass.setFencingToken(fencingTokenRepository.incrementToken(0L));
-                    synchronizationService.outboxSync();
+                    synchronizationService.snapshotSync();
 
                     globalVariableClass.setLeader(true);
                     globalVariableClass.setReady(true);

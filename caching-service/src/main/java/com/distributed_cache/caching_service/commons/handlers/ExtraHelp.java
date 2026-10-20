@@ -1,6 +1,7 @@
 
-package com.distributed_cache.caching_service.commons;
+package com.distributed_cache.caching_service.commons.handlers;
 
+import com.distributed_cache.caching_service.commons.commands.WriteCommand;
 import com.distributed_cache.caching_service.dto.RequestDTO;
 import com.distributed_cache.caching_service.entity.CacheEventSource;
 import com.distributed_cache.caching_service.service.DatabaseService;
@@ -17,6 +18,7 @@ public class IntHandler implements DataObject {
     private final DatabaseService databaseService;
     private final ModelMapper modelMapper;
     private final ObjectMapper objectMapper;
+
 
     public IntHandler(
             CacheStore cacheStore,
