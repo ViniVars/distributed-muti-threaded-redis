@@ -1,7 +1,6 @@
 
 package com.distributed_cache.caching_service.commons.handlers;
 
-import com.distributed_cache.caching_service.commons.commands.WriteCommand;
 import com.distributed_cache.caching_service.dto.RequestDTO;
 import com.distributed_cache.caching_service.entity.CacheEventSource;
 import com.distributed_cache.caching_service.service.DatabaseService;
@@ -11,35 +10,27 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Component;
 
+import java.util.ArrayList;
+import java.util.List;
+
 @Component
-public class IntjHandler implements DataObject {
+public class ListHandler_old implements DataObject {
 
     private final CacheStore cacheStore;
     private final DatabaseService databaseService;
-    private final ModelMapper modelMapper;
+    private final ModelMapper mapper;
     private final ObjectMapper objectMapper;
 
-
-    public IntjHandler(
+    public ListHandler_old(
             CacheStore cacheStore,
             DatabaseService databaseService,
-            ModelMapper modelMapper,
+            ModelMapper mapper,
             ObjectMapper objectMapper) {
 
         this.cacheStore = cacheStore;
         this.databaseService = databaseService;
-        this.modelMapper = modelMapper;
+        this.mapper = mapper;
         this.objectMapper = objectMapper;
-    }
-
-    private int requireInteger(Object value) {
-        if (!(value instanceof Integer number)) {
-            throw new IllegalArgumentException(
-                    "Expected an integer value"
-            );
-        }
-
-        return number;
     }
 
 
@@ -47,15 +38,12 @@ public class IntjHandler implements DataObject {
             RequestDTO requestDTO,
             Boolean isSync) throws Exception {
 
-        Integer value = requireInteger(requestDTO.getValue());
-
         return switch (requestDTO.getOperationType()) {
-            case SET -> set(requestDTO, value, isSync);
-            case INC -> inc(requestDTO, value, isSync);
-            case DRC -> dcr(requestDTO, value, isSync);
+            case APPEND -> append(requestDTO, isSync);
+            case POP -> pop(requestDTO, isSync);
 
             default -> throw new IllegalArgumentException(
-                    "Operation not supported on INT"
+                    "Operation not supported on LIST"
             );
         };
     }
@@ -75,22 +63,30 @@ public class IntjHandler implements DataObject {
 
         CacheValue current = cacheStore.inMemoryCache.get(key);
 
+        if (current == null) {
+            return null;
+        }
 
+        if (!(current.getValue() instanceof List<?> list)) {
+            throw new IllegalStateException(
+                    "Cached value is not a LIST"
+            );
+        }
 
-        return (current == null)
-                ? null
-                : current.getValue();
+        // Return a copy so callers cannot modify cached state.
+        return new ArrayList<>(list);
     }
 
-    private CacheEventSource createEvent(
+    private void persistEvent(
             RequestDTO requestDTO,
             int newVersion) throws Exception {
 
-        CacheEventSource event = modelMapper.map(
+        CacheEventSource event = mapper.map(
                 requestDTO,
                 CacheEventSource.class
         );
 
+        // Serialize the value so the event can be replayed.
         event.setValue(
                 objectMapper.writeValueAsString(
                         requestDTO.getValue()
@@ -100,51 +96,57 @@ public class IntjHandler implements DataObject {
         event.setReplicationStatus(false);
         event.setVersionNumber(newVersion);
 
-        return event;
-    }
-
-    private void persistEvent(
-            RequestDTO requestDTO,
-            int newVersion) throws Exception {
-
-        CacheEventSource event = createEvent(
-                requestDTO,
-                newVersion
-        );
-
+        // Validate leadership and persist the event.
         databaseService.saveEventIfLeader(event);
     }
 
-    public Boolean set(
+    public Boolean append(
             RequestDTO requestDTO,
-            Integer value,
             Boolean isSync) throws Exception {
 
         String key = requestDTO.getKey();
 
         CacheValue current = cacheStore.inMemoryCache.get(key);
 
-        int newVersion = current == null
-                ? 1
-                : Math.addExact(
-                current.getVersionNumber(), 1
-        );
+        List<Object> newList = new ArrayList<>();
 
+        int newVersion;
+
+        if (current == null) {
+            newVersion = 1;
+        } else {
+
+            if (!(current.getValue() instanceof List<?> oldList)) {
+                throw new IllegalArgumentException(
+                        "Existing value is not a LIST"
+                );
+            }
+
+            newList.addAll(oldList);
+
+            newVersion = Math.addExact(
+                    current.getVersionNumber(), 1
+            );
+        }
+
+        newList.add(requestDTO.getValue());
+
+        // Normal writes persist before updating memory.
+        // Synchronization writes skip database persistence.
         if (!Boolean.TRUE.equals(isSync)) {
             persistEvent(requestDTO, newVersion);
         }
 
         cacheStore.inMemoryCache.put(
                 key,
-                new CacheValue(value, newVersion)
+                new CacheValue(newList, newVersion)
         );
 
         return true;
     }
 
-    public Boolean inc(
+    public Boolean pop(
             RequestDTO requestDTO,
-            Integer value,
             Boolean isSync) throws Exception {
 
         String key = requestDTO.getKey();
@@ -157,13 +159,22 @@ public class IntjHandler implements DataObject {
             );
         }
 
-        if (!(current.getValue() instanceof Integer currentValue)) {
+        if (!(current.getValue() instanceof List<?> oldList)) {
             throw new IllegalArgumentException(
-                    "Existing value is not an INT"
+                    "Existing value is not a LIST"
             );
         }
 
-        int newValue = Math.addExact(currentValue, value);
+        if (oldList.isEmpty()) {
+            throw new IllegalStateException(
+                    "Cannot POP from an empty list"
+            );
+        }
+
+        List<Object> newList = new ArrayList<>(oldList);
+
+        // Remove the last element.
+        newList.remove(newList.size() - 1);
 
         int newVersion = Math.addExact(
                 current.getVersionNumber(), 1
@@ -175,46 +186,7 @@ public class IntjHandler implements DataObject {
 
         cacheStore.inMemoryCache.put(
                 key,
-                new CacheValue(newValue, newVersion)
-        );
-
-        return true;
-    }
-
-    public Boolean dcr(
-            RequestDTO requestDTO,
-            Integer value,
-            Boolean isSync) throws Exception {
-
-        String key = requestDTO.getKey();
-
-        CacheValue current = cacheStore.inMemoryCache.get(key);
-
-        if (current == null) {
-            throw new IllegalArgumentException(
-                    "Key does not exist"
-            );
-        }
-
-        if (!(current.getValue() instanceof Integer currentValue)) {
-            throw new IllegalArgumentException(
-                    "Existing value is not an INT"
-            );
-        }
-
-        int newValue = Math.subtractExact(currentValue, value);
-
-        int newVersion = Math.addExact(
-                current.getVersionNumber(), 1
-        );
-
-        if (!Boolean.TRUE.equals(isSync)) {
-            persistEvent(requestDTO, newVersion);
-        }
-
-        cacheStore.inMemoryCache.put(
-                key,
-                new CacheValue(newValue, newVersion)
+                new CacheValue(newList, newVersion)
         );
 
         return true;

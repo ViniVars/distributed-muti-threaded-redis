@@ -17,13 +17,11 @@ public class CacheStore {
 
     public ConcurrentHashMap<String, CacheValue> inMemoryCache = new ConcurrentHashMap<>();
 
-    public final Object inMemoryCacheLock;
+    public final Object inMemoryCacheLock = new Object();
 
     private final ConcurrentHashMap<String, ReentrantReadWriteLock> inMemoryLock = new ConcurrentHashMap<>();
 
     private final ConcurrentHashMap<String, PriorityQueue<CacheEventSource>> inMemoryMinHeap = new ConcurrentHashMap<>();
-
-    private final GlobalVariableClass globalVariableClass;
 
     public ReentrantReadWriteLock getLock(String key) {
         return inMemoryLock.computeIfAbsent(
@@ -53,13 +51,13 @@ public class CacheStore {
             return;
         }
 
-        while (!minHeap.isEmpty() && minHeap.peek().getVersionNumber() < version) {
+        while (!minHeap.isEmpty() && minHeap.peek().getVersionNumber() <= version) {
             minHeap.poll();
         }
     }
 
 
-    public CacheEventSource bufferGetSequence(String key, Integer currentVersion){
+    public CacheEventSource bufferGetNextSequence(String key, Integer currentVersion){
 
         PriorityQueue<CacheEventSource> minHeap = inMemoryMinHeap.get(key);
         CacheEventSource cacheEventSource = null;
@@ -76,4 +74,6 @@ public class CacheStore {
 
         return cacheEventSource;
     }
+
+
 }

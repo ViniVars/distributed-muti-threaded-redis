@@ -1,10 +1,12 @@
 package com.distributed_cache.caching_service.commons.handlers;
 
-import com.distributed_cache.caching_service.dto.RequestDTO;
-import com.distributed_cache.caching_service.entity.CacheEventSource;
+import com.distributed_cache.caching_service.commons.commands.GeneralReadCommand;
+import com.distributed_cache.caching_service.commons.commands.WriteCommand;
+import com.distributed_cache.caching_service.utils.OperationType;
 
 public interface DataObject {
-    public Boolean execute(RequestDTO requestDTO) throws Exception;
-    public Boolean executeSync(CacheEventSource cacheEventSource) throws Exception;
-    public Object read(String key, String path) throws Exception;
+
+    WriteCommand getWriteHandlerCommand(OperationType operationType);
+    GeneralReadCommand getReadHandlerCommand();
+    Boolean verifyValue(Object value);
 }

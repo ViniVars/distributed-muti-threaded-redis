@@ -8,18 +8,18 @@ import org.springframework.stereotype.Component;
 public class DataObjectFactory {
 
     private final IntHandler intHandler;
-    private final StringHandler stringHandler;
-    private final ListHandler listHandler;
-    private final JsonHandler jsonHandler;
+    private final StringHandler_old stringHandler;
+    private final ListHandler_old listHandler;
+    private final JsonHandler_old jsonHandler;
 
-    public DataObjectFactory(IntHandler intHandler, StringHandler stringHandler, ListHandler listHandler, JsonHandler jsonHandler) {
+    public DataObjectFactory(IntHandler intHandler, StringHandler_old stringHandler, ListHandler_old listHandler, JsonHandler_old jsonHandler) {
         this.intHandler = intHandler;
         this.stringHandler = stringHandler;
         this.listHandler = listHandler;
         this.jsonHandler = jsonHandler;
     }
 
-    public DataObject create(DataObjectType dataObjectType) throws Exception {
+    public DataObject getDataHandler(DataObjectType dataObjectType) throws Exception {
 
         return switch (dataObjectType){
             case INT -> intHandler;

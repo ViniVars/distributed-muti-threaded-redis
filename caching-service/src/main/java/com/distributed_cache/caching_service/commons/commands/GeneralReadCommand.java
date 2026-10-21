@@ -7,15 +7,15 @@ import org.springframework.stereotype.Component;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 @Component
-public class GeneralReadCommand {
+public abstract class GeneralReadCommand {
 
-    private final CacheStore cacheStore;
+    protected final CacheStore cacheStore;
 
     public GeneralReadCommand(CacheStore cacheStore) {
         this.cacheStore = cacheStore;
     }
 
-    public Object execute(String key, String path){
+    public Object read(String key, String path){
 
         ReentrantReadWriteLock lock = cacheStore.getLock(key);
         lock.readLock().lock();

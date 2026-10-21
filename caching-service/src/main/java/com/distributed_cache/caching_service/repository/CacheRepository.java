@@ -3,6 +3,7 @@ package com.distributed_cache.caching_service.repository;
 
 import com.distributed_cache.caching_service.entity.CacheEventSource;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -25,5 +26,14 @@ public interface CacheRepository extends JpaRepository<CacheEventSource, Integer
             @Param("ShardID") Long shardID
             , @Param("eventSourceId")Long eventSourceId
             );
+
+
+    @Modifying
+    @Query(value = """
+            UPDATE CacheKeyVersion ckv
+            SET ckv.versionNumber = ckv.versionNumber + 1
+            WHERE ckv.key = :key
+            """)
+    Integer updateCacheKeyVersion(@Param("key") String key);
 
 }

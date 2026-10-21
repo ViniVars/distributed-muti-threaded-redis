@@ -6,4 +6,5 @@ public enum OperationType {
     , DRC
     , APPEND
     , POP
+    , GET
 }

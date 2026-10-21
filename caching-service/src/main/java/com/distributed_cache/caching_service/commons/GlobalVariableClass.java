@@ -21,7 +21,7 @@ public class GlobalVariableClass {
     public volatile Integer lastEventCheckpoint = 0;
 
 
-    public final Object lastEventLock;
+    public final Object lastEventLock = new Object();
 
 
     public void updateLastEvent(Integer value){

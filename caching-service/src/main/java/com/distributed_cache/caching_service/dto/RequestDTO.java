@@ -24,11 +24,11 @@ public class RequestDTO {
     private Object value;
     private String path;
 
-    @NonNull
-    private OffsetDateTime timeStamp;
-
-    @NonNull
-    private Long ttl;
+//    @NonNull
+//    private OffsetDateTime timeStamp;
+//
+//    @NonNull
+//    private Long ttl;
     private Long shardID = 0L;
 
 }
