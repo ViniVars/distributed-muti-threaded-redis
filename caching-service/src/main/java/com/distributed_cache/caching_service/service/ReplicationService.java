@@ -92,7 +92,7 @@ public class ReplicationService {
                 writeCommand.syncInMemory(event);
             }
             else{
-                List<CacheEventSource> replicationGapEvents = cacheRepository.getReplicationGap(key, currentVersion, nextVersion);
+                List<CacheEventSource> replicationGapEvents = cacheRepository.getReplicationGap(key, currentVersion, nextVersion, Math.toIntExact(globalVariableClass.getShardID()));
                 for (CacheEventSource replicationGapEvent : replicationGapEvents) {
                     writeCommand.syncInMemory(replicationGapEvent);
                 }
@@ -108,7 +108,6 @@ public class ReplicationService {
     }
 
 
-    @
     @Scheduled(fixedDelay = 5, timeUnit = TimeUnit.MINUTES)
     public void replicationBackgroundWorker() {
 
